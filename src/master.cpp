@@ -108,9 +108,9 @@ void master_routine(const char* path) {
 
     if (testrun.running) {
 
-      std::cout << slaves_count + 1 << '\t' << time << std::endl;
+      std::cout << time << std::endl;
 
-      //    } else {
+          } else {
 
       for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
         int slave_score = results[slave_index][length];
