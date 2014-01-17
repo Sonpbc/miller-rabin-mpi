@@ -1,30 +1,67 @@
 /* 
- * File:   master.cpp
+ * File:   main.cpp
  * Author: Zosia Sobocinska
+ *
+ * Created on December 20, 2013, 11:04 AM
  * 
- * Created on December 20, 2013, 11:32 AM
+ * MPI CH2
  */
 
+#include <mpi.h>
+#include "../headers/list.h"
 #include "../headers/master.h"
+#include "../headers/slave.h"
 
-using std::cout;
-using std::endl;
+#define MASTER_RANGE 0
+#define READY_STATE 0
 
-void master_routine(const char* path) {
+void usage(const char* name, const char* arguments);
 
+/*
+ * 
+ */
+int main(int argc, char** argv) {
+
+  MPI_Init(NULL, NULL);
+
+  long length;
   int world_size;
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   int slaves_count = world_size - 1;
+  List * list;
+  double duration;
+
+  MPI_Status status;
+
+  MPI_Request* ready_requests;
+  MPI_Request *send_requests;
 
   Testrun testrun = get_testrun_params();
 
-  ifstream ifs;
-  ifs.open(path);
+  if (argc < 3) {
+    const char* args = "<path> <k>";
+    usage(argv[0], args);
+  }
 
-  if (ifs.is_open()) {
+
+  int tasks, rank;
+  MPI_Comm_size(MPI_COMM_WORLD, &tasks);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
-    List* list = List::create();
+  if (!rank) { // MASTER
+    const char* path = argv[1];
+
+
+    ifstream ifs;
+    ifs.open(path);
+
+    if (!ifs.is_open()) {
+      exit(1);
+    }
+
+
+    list = List::create();
 
     //////////////////////////////////////////////////////////////////////////
     // SCAN NUMBERS
@@ -37,22 +74,69 @@ void master_routine(const char* path) {
       }
     }
     ifs.close();
-    long length = list->length();
+    length = list->length();
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (rank) { // SLAVE
+    int k = atoi(argv[2]);
+
+    long ready_state = READY_STATE;
+    long score;
+
+
+    recv(&length, MASTER_RANGE, &status);
+
+    long *results = new long[length + 1];
+
+    long number;
+
+    score = 0;
+    while (true) {
+
+      // non-blocking send and recv are pointless
+      // since nothing master doesn't send tasks to busy thread
+      send(&ready_state, MASTER_RANGE);
+      recv(&number, MASTER_RANGE, &status);
+
+      if (!number) break;
+
+
+
+      while (testrun.iterations-- > 0) {
+        if (test_miller_rabin(number, k)) {
+          results[score] = number;
+        } else {
+          results[score] = -number;
+        }
+      }
+
+      score++;
+    }
+
+    results[length] = score;
+
+    send_more(results, length + 1, MASTER_RANGE);
+
+    delete [] results;
+  } else { // MASTER
+
 
     //////////////////////////////////////////////////////////////////////////
     // DISTRIBUTE TASKS
 
+    duration = MPI_Wtime();
     MPI_Status status;
 
     for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
       // let slaves get ready for maximum possible amount of data 
       send(&length, slave_index + 1);
     }
-
-    MPI_Request* ready_requests = new MPI_Request[slaves_count];
+    ready_requests = new MPI_Request[slaves_count];
     long ready_buff; // just flag buffer for MPI
 
-    MPI_Request *send_requests = new MPI_Request[length];
+    send_requests = new MPI_Request[length];
 
     int ready_slave_index = -1;
     memset(ready_requests, MPI_REQUEST_NULL, slaves_count * sizeof (MPI_Request));
@@ -80,6 +164,12 @@ void master_routine(const char* path) {
       send(&eot_buff, slave_index + 1);
     }
 
+
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (!rank) { // MASTER
+    duration = MPI_Wtime() - duration;
     List::destroy(list);
 
     delete [] ready_requests;
@@ -105,9 +195,9 @@ void master_routine(const char* path) {
 
     if (testrun.running) {
 
-      std::cout << time << std::endl;
+      std::cout << duration << std::endl;
 
-          } else {
+    } else {
 
       for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
         int slave_score = results[slave_index][length];
@@ -124,9 +214,16 @@ void master_routine(const char* path) {
       delete [] results;
     }
 
-
-  } else {
-    cerr << "Cannot open file " << path << endl;
   }
 
+
+  MPI_Finalize();
+
+  return 0;
 }
+
+void usage(const char* name, const char* arguments) {
+  std::cout << "Usage: " << name << ' ' << arguments << std::endl;
+  exit(64);
+}
+

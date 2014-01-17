@@ -1,0 +1,120 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[polish]{babel}
+\usepackage{polski}
+\usepackage[utf8]{inputenc}
+\usepackage{indentfirst}
+\usepackage{geometry}
+\usepackage[font={small,it}]{caption}
+\usepackage{array}
+\usepackage[pdftex]{color,graphicx}
+\usepackage{subfigure}
+\usepackage{afterpage}
+\usepackage{setspace}
+\usepackage{color}
+\usepackage{wrapfig}
+\usepackage{listings}
+\usepackage{datetime}
+
+\renewcommand{\onehalfspacing}{\setstretch{1.6}}
+
+\geometry{tmargin=2.5cm,bmargin=2.5cm,lmargin=2.5cm,rmargin=2.5cm}
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{0mm}
+
+\newenvironment{lista}{
+\begin{itemize}
+  \setlength{\itemsep}{1pt}
+  \setlength{\parskip}{0pt}
+  \setlength{\parsep}{0pt}
+}{\end{itemize}}
+
+\newcommand{\linia}{\rule{\linewidth}{0.4mm}}
+
+\definecolor{lbcolor}{rgb}{0.95,0.95,0.95}
+\lstset{
+    backgroundcolor=\color{lbcolor},
+    tabsize=4,
+  language=C++,
+  captionpos=b,
+  tabsize=3,
+  frame=lines,
+  numbers=left,
+  numberstyle=\tiny,
+  numbersep=5pt,
+  breaklines=true,
+  showstringspaces=false,
+  basicstyle=\footnotesize,
+  identifierstyle=\color{magenta},
+  keywordstyle=\color[rgb]{0,0,1},
+  commentstyle=\color{Darkgreen},
+  stringstyle=\color{red}
+  }
+
+\begin{document}
+
+\noindent
+\begin{tabular}{|c|p{11cm}|c|} \hline 
+Zofia Sobocińska & \ddmmyyyydate\today \tabularnewline
+\hline 
+\end{tabular}
+
+
+\section*{Zadanie 5 - Mnożenie macierzy na kartach graficznych}
+
+Program implementuje mnożenie macierzy $ A_{N \times N} \times B_{N \times N} = C_{N \times N} $ w technologii CUDA. Zadanie jest podzielone na bloki o rozmiarze $4 \times 4$. Takich bloków wykorzystanych jest $floor(\frac{N + 4}{4} - 1) \times floor(\frac{N + 4}{4} - 1)$.
+
+\begin{lstlisting}
+__global__ void multiple(float* C, float* A, float* B, uint size) {
+
+    float c = 0.0;
+
+    uint yc = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    uint xc = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+
+    uint GRID_SIZE = (BLOCK_SIZE + size - 1) / BLOCK_SIZE;
+
+    if (xc < size && yc < size) {
+
+        for (uint i = 0; i < GRID_SIZE; i++) {
+            for (uint j = 0; j < BLOCK_SIZE; ++j) {
+                uint index = i * BLOCK_SIZE + j;
+                if ((index < size) && (index < size)) {
+                    c += A[yc * size + index] * B[index * size + xc];
+                }
+            }
+        }
+        C[yc * size + xc] = c;
+    }
+}
+\end{lstlisting}
+
+\subsection*{Czas obliczeń}
+
+Średnie czasy obliczeń mnożenia macierzy $128 \times 128$ (przy całkowitej liczbie iteracji $100000$) w technologii CUDA i na CPU (wielo- bądź jednowątkowo) podane zostały w tabeli:
+
+\begin{table}[!hbp]
+\centering
+\begin{tabular}{|cl|c|c|}
+\hline 
+& & średni czas & przyśpieszenie \\
+& środowisko & obliczeń & względem 1 wątku\\
+\hline 
+CPU & sekwencyjnie & $9.911ms$ &\\
+& OpenMP - 4 wątki & $3.282ms$ & $3 \times$ \\
+GPU & CUDA & $0.570 ms$ & $17 \times$ \tabularnewline
+\hline
+\end{tabular}
+\caption{Porównanie czasów obliczeń mnożenia macierzy w różnych technologiach}
+\end{table}
+
+\subsection*{Podsumowanie}
+
+Technologia CUDA wymaga od programisty zmiany koncepcji myślenia o projektowaniu algorytmów. Wewnątrz kernela - kodu wątku, który ma się wykonać na GPU - dysponujemy nie numerem iteracji, ale identyfikatorem bloku i wątku, na podstawie których określamy, co chcemy zrobić z danymi. Dodatkowo możemy przekazać kernelowi wskaźnik na obszar pamięci zaalokowany w RAMie karty graficznej, na który (z którego) możemy możliwość kopiować nasze dane z (do) pamięci zaalokowanej w RAMie hosta.
+
+\subsection*{Od autora}
+
+Pragnę przeprosić za spóźniony czas oddania sprawozdania. Przyczyną tegoż stał się błąd z gatunku kardynalnych, przez który wypisywany czas obliczeń pozostawał stale na poziomie 0ms. W celu uniknięcia podobnych błędów kardynalnych w przyszłości pozostanę przy głupotoodpornym przekierowywaniu strumienia do std::cout.
+
+\end{document}
