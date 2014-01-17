@@ -89,28 +89,28 @@ void master_routine(const char* path) {
     delete [] send_requests;
 
 
-    //////////////////////////////////////////////////////////////////////////
-    // COLLECT RESULTS
-    long **results = new long*[slaves_count];
-    MPI_Request *collect_requests = new MPI_Request[slaves_count];
-
-    for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
-      results[slave_index] = new long[length + 1];
-
-      irecv_more(results[slave_index], length + 1, slave_index + 1, &(collect_requests[slave_index]));
-    }
-
-    waitall(slaves_count, collect_requests, &status);
-    delete [] collect_requests;
-
-    //////////////////////////////////////////////////////////////////////////
-    // DISPLAY RESULTS
-
     if (testrun.running) {
 
       std::cout << time << std::endl;
 
-          } else {
+    } else {
+      //////////////////////////////////////////////////////////////////////////
+      // COLLECT RESULTS
+      long **results = new long*[slaves_count];
+      MPI_Request *collect_requests = new MPI_Request[slaves_count];
+
+      for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
+        results[slave_index] = new long[length + 1];
+
+        irecv_more(results[slave_index], length + 1, slave_index + 1, &(collect_requests[slave_index]));
+      }
+
+      waitall(slaves_count, collect_requests, &status);
+      delete [] collect_requests;
+
+      //////////////////////////////////////////////////////////////////////////
+      // DISPLAY RESULTS
+
 
       for (int slave_index = 0; slave_index < slaves_count; slave_index++) {
         int slave_score = results[slave_index][length];
